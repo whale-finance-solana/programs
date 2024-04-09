@@ -1,17 +1,32 @@
-use anchor_lang::{prelude::*, solana_program::program::invoke_signed};
+use anchor_lang::{prelude::*};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{ mint_to, initialize_mint, InitializeMint, MintTo, Token},
 };
+use solana_program::pubkey;
+
 
 declare_id!("55tC9joryrqBuUJjURE5i2pLLbzoFfx1K1hRWnMfigtF");
+
+const TREASURY_PUBKEY: Pubkey = pubkey!("BLSzuy78aPbCw5ug7bNiGeq29cbuJa1LfGaL7C1dkzj8");
 
 #[program]
 mod vault_minter {
     use super::*;
 
-    pub fn create_vault(ctx: Context<CreateVault>, decimals:u8,quantity:u64) -> Result<()> {
 
+    pub fn create_vault(ctx: Context<CreateVault>) -> Result<()> {
+
+        //Staking SOL to create vault
+        //  let cpi_context = CpiContext::new(
+        //      ctx.accounts.system_program.to_account_info(), 
+        //      anchor_lang::system_program::Transfer {
+        //          from: ctx.accounts.signer.to_account_info(),
+        //          to: ctx.accounts.treasury_account.to_account_info(),
+        //  });
+        //  anchor_lang::system_program::transfer(cpi_context, amount_staking)?;
+
+        //creating vault with mint token as quota token
         anchor_lang::system_program::create_account(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(), 
@@ -23,13 +38,15 @@ mod vault_minter {
             82, 
             ctx.accounts.token_program.key
         )?;
-      
+
+        
+        //initializing mint token
         initialize_mint(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 InitializeMint{mint:ctx.accounts.mint_token.to_account_info(),rent:ctx.accounts.rent.to_account_info()}
             ), 
-            decimals, 
+            6, 
             ctx.accounts.signer.key, 
             Some(ctx.accounts.signer.key)
         )?;
@@ -65,48 +82,48 @@ mod vault_minter {
       }
 
     pub fn invest_vault(ctx: Context<InvestVault>, amount: u64) -> Result<()> {
-    let seeds = &["mint".as_bytes(), &[*ctx.bumps.get("mint").unwrap()]];
-    let signer = [&seeds[..]];
+        // let seeds = &["mint".as_bytes(), &[*ctx.bumps.get("mint").unwrap()]];
+        // let signer = [&seeds[..]];
+            
+        // Transfer the amount (in lamports) to the vault account
+            
+        // let transfer_lamport_instruction = anchor_lang::system_program::transfer(
+        //     &ctx.accounts.signer.to_account_info().key,
+        //     &ctx.accounts.mint_token.to_account_info().key,
+        //     amount,
+        // );
+
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(), 
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.signer.to_account_info(),
+                to: ctx.accounts.mint_token.to_account_info(),
+        });
+        anchor_lang::system_program::transfer(cpi_context, amount)?;
+
+        // anchor_lang::solana_program::program::invoke_signed(
+        //     &transfer_lamport_instruction,
+        //     &[
+        //         ctx.accounts.investor.to_account_info(),
+        //         ctx.accounts.vault.clone(),
+        //         ctx.accounts.system_program.to_account_info(),
+        //     ],
+        //     &[],
+        // )?;
+
+        mint_to(
+            CpiContext::new(
+                ctx.accounts.token_account.to_account_info(), 
+                MintTo{
+                    authority:ctx.accounts.signer.to_account_info(),
+                    mint:ctx.accounts.mint_token.to_account_info(),
+                    to:ctx.accounts.token_account.to_account_info()
+                }
+            ), 
+            amount
+        )?;
         
-    // Transfer the amount (in lamports) to the vault account
-        
-    // let transfer_lamport_instruction = anchor_lang::system_program::transfer(
-    //     &ctx.accounts.signer.to_account_info().key,
-    //     &ctx.accounts.mint_token.to_account_info().key,
-    //     amount,
-    // );
-
-    let cpi_context = CpiContext::new(
-        ctx.accounts.system_program.to_account_info(), 
-        anchor_lang::system_program::Transfer {
-            from: ctx.accounts.signer.to_account_info(),
-            to: ctx.accounts.mint_token.to_account_info(),
-    });
-    anchor_lang::system_program::transfer(cpi_context, amount)?;
-
-    // anchor_lang::solana_program::program::invoke_signed(
-    //     &transfer_lamport_instruction,
-    //     &[
-    //         ctx.accounts.investor.to_account_info(),
-    //         ctx.accounts.vault.clone(),
-    //         ctx.accounts.system_program.to_account_info(),
-    //     ],
-    //     &[],
-    // )?;
-
-    mint_to(
-        CpiContext::new(
-            ctx.accounts.token_account.to_account_info(), 
-            MintTo{
-                authority:ctx.accounts.signer.to_account_info(),
-                mint:ctx.accounts.mint_token.to_account_info(),
-                to:ctx.accounts.token_account.to_account_info()
-            }
-        ), 
-        amount
-    )?;
-      
-  Ok(())
+    Ok(())
 }
 
 
@@ -122,6 +139,10 @@ pub struct CreateVault<'info> {
     ///CHECK:
     #[account(mut)]
     pub token_account:AccountInfo<'info>,
+
+    // #[account(mut, 
+    //     address = BLSzuy78aPbCw5ug7bNiGeq29cbuJa1LfGaL7C1dkzj8)]
+    // pub treasury_account:AccountInfo<'info>,
     pub system_program:Program<'info,System>,
     pub token_program:Program<'info,Token>,
     pub associate_token_program:Program<'info,AssociatedToken>,
